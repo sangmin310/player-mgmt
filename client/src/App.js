@@ -106,6 +106,12 @@ class App extends Component {
       searchKeyword: "",
       loginOpen: false,
       signUpOpen: false,
+      username: "",
+      password: "",
+      confirmPassword: "",
+      email: "",
+      user: null, // 로그인한 사용자 정보를 저장
+      logoutMessage: "", // 로그아웃 메시지를 저장
     };
   }
 
@@ -125,6 +131,16 @@ class App extends Component {
     this.callApi()
       .then((res) => this.setState({ customers: res }))
       .catch((err) => console.log(err));
+
+    // 사용자가 로그인했는지 확인하고 사용자 정보를 가져옵니다.
+    const token = localStorage.getItem("token");
+    if (token) {
+      this.setState({ user: { username: localStorage.getItem("username") } });
+    }
+  }
+
+  componentWillUnmount() {
+    clearInterval(this.timer);
   }
 
   callApi = async () => {
@@ -158,6 +174,66 @@ class App extends Component {
     this.setState({ signUpOpen: false });
   };
 
+  handleLogin = async () => {
+    const { username, password } = this.state;
+
+    const response = await fetch("/api/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      alert("로그인 성공");
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("username", username); // 사용자 이름 저장
+      this.setState({ user: { username } }); // 로그인 상태 업데이트
+      this.handleLoginClose();
+    } else {
+      alert("로그인 실패");
+    }
+  };
+
+  handleSignUp = async () => {
+    const { username, password, confirmPassword, email } = this.state;
+
+    if (password !== confirmPassword) {
+      alert("비밀번호가 일치하지 않습니다.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password, email }),
+      });
+
+      if (response.ok) {
+        alert("회원가입 성공");
+        this.handleSignUpClose();
+      } else {
+        const message = await response.text();
+        alert(`회원가입 실패: ${message}`);
+      }
+    } catch (error) {
+      console.error("회원가입 요청 오류:", error);
+      alert("회원가입 요청 중 오류가 발생했습니다.");
+    }
+  };
+
+  handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+    this.setState({ user: null });
+    alert("로그아웃되었습니다.");
+  };
+
   render() {
     const filteredComponents = (data) => {
       data = data.filter((c) =>
@@ -178,7 +254,15 @@ class App extends Component {
       ));
     };
 
-    const { completed } = this.state;
+    const {
+      completed,
+      username,
+      password,
+      confirmPassword,
+      email,
+      user,
+      logoutMessage,
+    } = this.state;
     const cellList = [
       "등번호",
       "프로필 이미지",
@@ -201,6 +285,20 @@ class App extends Component {
             <Typography variant="h6" color="inherit" sx={{ flexGrow: 1 }}>
               선수 관리 시스템
             </Typography>
+            {user ? (
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <Typography variant="body1" style={{ marginRight: 15 }}>
+                  {user.username}
+                </Typography>
+                <Button color="inherit" onClick={this.handleLogout}>
+                  로그아웃
+                </Button>
+              </div>
+            ) : (
+              <Button color="inherit" onClick={this.handleLoginOpen}>
+                로그인
+              </Button>
+            )}
             <SearchStyled>
               <SearchIconStyled />
               <InputBaseStyled
@@ -210,11 +308,13 @@ class App extends Component {
                 onChange={this.handleValueChange}
               />
             </SearchStyled>
-            <Button color="inherit" onClick={this.handleLoginOpen}>
-              로그인
-            </Button>
           </ToolbarStyled>
         </AppBarStyled>
+        {logoutMessage && (
+          <div style={{ textAlign: "center", marginTop: 10, color: "green" }}>
+            {logoutMessage}
+          </div>
+        )}
         <div
           style={{
             marginTop: 15,
@@ -229,8 +329,8 @@ class App extends Component {
           <StyledTable>
             <TableHeadStyled>
               <TableRow>
-                {cellList.map((cell, index) => (
-                  <TableCell key={index}>{cell}</TableCell>
+                {cellList.map((c) => (
+                  <TableCell key={c}>{c}</TableCell>
                 ))}
               </TableRow>
             </TableHeadStyled>
@@ -239,7 +339,7 @@ class App extends Component {
                 filteredComponents(this.state.customers)
               ) : (
                 <TableRow>
-                  <TableCell colSpan="7" align="center">
+                  <TableCell colSpan="6" align="center">
                     <StyledProgress variant="determinate" value={completed} />
                   </TableCell>
                 </TableRow>
@@ -248,86 +348,82 @@ class App extends Component {
           </StyledTable>
         </StyledPaper>
 
+        {/* 로그인 다이얼로그 */}
         <Dialog open={this.state.loginOpen} onClose={this.handleLoginClose}>
           <DialogTitle>로그인</DialogTitle>
           <DialogContent>
             <TextField
-              autoFocus
-              margin="dense"
-              id="username"
               label="아이디"
               type="text"
+              name="username"
+              value={username}
+              onChange={this.handleValueChange}
               fullWidth
-              variant="standard"
             />
             <TextField
-              margin="dense"
-              id="password"
               label="비밀번호"
               type="password"
+              name="password"
+              value={password}
+              onChange={this.handleValueChange}
               fullWidth
-              variant="standard"
             />
           </DialogContent>
           <DialogActions>
-            <Button
-              onClick={this.handleSignUpOpen}
-              color="primary"
-              style={{ marginRight: "auto" }}
-            >
-              회원가입
-            </Button>
             <Button onClick={this.handleLoginClose} color="primary">
               취소
             </Button>
-            <Button onClick={this.handleLoginClose} color="primary">
+            <Button onClick={this.handleLogin} color="primary">
               로그인
+            </Button>
+            <Button onClick={this.handleSignUpOpen} color="primary">
+              회원가입
             </Button>
           </DialogActions>
         </Dialog>
 
+        {/* 회원가입 다이얼로그 */}
         <Dialog open={this.state.signUpOpen} onClose={this.handleSignUpClose}>
           <DialogTitle>회원가입</DialogTitle>
           <DialogContent>
             <TextField
-              autoFocus
-              margin="dense"
-              id="newUsername"
               label="아이디"
               type="text"
+              name="username"
+              value={username}
+              onChange={this.handleValueChange}
               fullWidth
-              variant="standard"
             />
             <TextField
-              margin="dense"
-              id="newPassword"
               label="비밀번호"
               type="password"
+              name="password"
+              value={password}
+              onChange={this.handleValueChange}
               fullWidth
-              variant="standard"
             />
             <TextField
-              margin="dense"
-              id="confirmPassword"
               label="비밀번호 확인"
               type="password"
+              name="confirmPassword"
+              value={confirmPassword}
+              onChange={this.handleValueChange}
               fullWidth
-              variant="standard"
             />
             <TextField
-              margin="dense"
-              id="email"
               label="이메일"
               type="email"
+              name="email"
+              value={email}
+              onChange={this.handleValueChange}
               fullWidth
-              variant="standard"
             />
           </DialogContent>
           <DialogActions>
             <Button onClick={this.handleSignUpClose} color="primary">
               취소
             </Button>
-            <Button onClick={this.handleSignUpClose} color="primary">
+            <Button onClick={this.handleSignUp} color="primary">
               회원가입
             </Button>
           </DialogActions>
