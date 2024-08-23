@@ -283,7 +283,7 @@ class App extends Component {
               style={{ width: 40, height: 40, marginRight: 15 }}
             />
             <Typography variant="h6" color="inherit" sx={{ flexGrow: 1 }}>
-              선수 관리 시스템
+              현현수 관리 시스템
             </Typography>
             {user ? (
               <div style={{ display: "flex", alignItems: "center" }}>
